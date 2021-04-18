@@ -1,61 +1,39 @@
-FROM debian:stretch
+FROM php:7.4-fpm-alpine
 
-MAINTAINER lionelkouame@gmail.com
+COPY ./sylius /var/www/html
 
-ENV HTTPD_PREFIX /usr/local/apache2
-ENV PATH $HTTPD_PREFIX/bin:$PATH
-
-RUN mkdir -p "$HTTPD_PREFIX" \
-    && chown www-data:www-data "$HTTPD_PREFIX"
-
-WORKDIR $HTTPD_PREFIX
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-    apache2 curl \
-    && rm -r /var/lib/apt/lists/*
-RUN a2enmod proxy_fcgi ssl rewrite proxy proxy_balancer proxy_http proxy_ajp
-RUN sed -i '/Global configuration/a \
-ServerName localhost \
-' /etc/apache2/apache2.conf
-
-EXPOSE 80 443
-
-RUN rm -f /run/apache2/apache2.pid
-
-CMD apachectl  -DFOREGROUND -e info
-
-#PHP 7.4 part
-FROM php:7.4-fpm
-
-RUN pecl install apcu
-
-RUN echo "extension=apcu.so" > /usr/local/etc/php/conf.d/apcu.ini
-
-RUN apt update  && apt install -y  zip  && docker-php-ext-install opcache
-
-# Composer
+# Install composer
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 
-RUN apt-get update \
-  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-  # needed for gd
-  libfreetype6-dev \
-  libjpeg62-turbo-dev \
-  libpng-dev \
-  && rm -rf /var/lib/apt/lists/*
+# Install bash
+RUN apk update  && apk upgrade && apk add bash
 
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
-  && docker-php-ext-install -j "$(nproc)" gd
+# install  ALL module for Sylius check requirements
+RUN set -xe \
+    && apk add --update \
+        icu \
+    && apk add --no-cache --virtual .php-deps \
+        make \
+    && apk add --no-cache --virtual .build-deps \
+        $PHPIZE_DEPS \
+        zlib-dev \
+        icu-dev \
+        g++ \
+    && docker-php-ext-configure intl \
+    && docker-php-ext-install \
+        intl \
+        exif \
+        fileinfo \
+    && docker-php-ext-enable intl \
+    && { find /usr/local/lib -type f -print0 | xargs -0r strip --strip-all -p 2>/dev/null || true; } \
+    && apk del .build-deps \
+    && rm -rf /tmp/* /usr/local/lib/php/doc/* /var/cache/apk/*
+RUN apk add --no-cache libpng libpng-dev && docker-php-ext-install gd && apk del libpng-dev
 
-RUN apt-get update && \
-    apt-get install -y \
-        zlib1g-dev
+WORKDIR  /var/www/html
 
-#install some base extensions
-RUN apt-get install -y \
-        libzip-dev \
-        zip \
-  && docker-php-ext-install zip
+RUN chown www-data:www-data .
 
-RUN apt-get update && apt-get install -y libpq-dev && docker-php-ext-install pdo pdo_pgsql pdo_mysql
+EXPOSE 9000
+
+CMD ["php-fpm"]
