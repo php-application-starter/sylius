@@ -29,7 +29,7 @@ RUN set -xe \
     && apk del .build-deps \
     && rm -rf /tmp/* /usr/local/lib/php/doc/* /var/cache/apk/*
 RUN apk add --no-cache libpng libpng-dev && docker-php-ext-install gd && apk del libpng-dev
-RUN docker-php-ext-install pdo pdo_mysql
+RUN docker-php-ext-install pdo pdo_mysql opcache
 
 WORKDIR  /var/www/html
 
