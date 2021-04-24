@@ -31,9 +31,16 @@ RUN set -xe \
 RUN apk add --no-cache libpng libpng-dev && docker-php-ext-install gd && apk del libpng-dev
 RUN docker-php-ext-install pdo pdo_mysql opcache
 
+
 WORKDIR  /var/www/html
 
 RUN chown www-data:www-data .
+RUN apk update \
+	 && apk add zip
+
+RUN apk update && apk upgrade
+RUN apk add php7-zip
+
 
 EXPOSE 9000
 
