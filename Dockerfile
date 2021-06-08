@@ -30,6 +30,9 @@ RUN set -xe \
     && rm -rf /tmp/* /usr/local/lib/php/doc/* /var/cache/apk/*
 RUN apk add --no-cache libpng libpng-dev && docker-php-ext-install gd && apk del libpng-dev
 RUN docker-php-ext-install pdo pdo_mysql opcache
+RUN docker-php-ext-configure gd --with-jpeg-dir=/usr/include/ --with-png-dir=/usr/include --with-webp-dir=/usr/include --with-freetype-dir=/usr/include/;
+RUN docker-php-ext-configure gd
+
 
 
 WORKDIR  /var/www/html
@@ -40,7 +43,6 @@ RUN apk update \
 
 RUN apk update && apk upgrade
 RUN apk add php7-zip
-
 
 EXPOSE 9000
 
