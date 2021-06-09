@@ -1,49 +1,60 @@
-FROM php:7.4-fpm-alpine
+FROM php:7.4-fpm
+MAINTAINER Sylius Docker Team <docker@sylius.org>
 
-COPY ./sylius /var/www/html
+ENV DEBIAN_FRONTEND noninteractive
+ENV DEBIAN_CODENAME buster
+ENV TZ UTC
 
-# Install composer
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
+	&& echo $TZ > /etc/timezone \
+	&& dpkg-reconfigure -f noninteractive tzdata
 
-# Install bash
-RUN apk update  && apk upgrade && apk add bash
+# All things PHP
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends \
+	acl \
+	unzip \
+	libfreetype6-dev \
+	libxpm-dev \
+	libwebp-dev \
+	libjpeg-dev \
+	libzip-dev \
+	libpng-dev \
+	libicu-dev \
+  vim \
+	&& apt-get clean all \
+	&& docker-php-ext-configure gd \
+    --with-freetype \
+    --with-jpeg \
+    --with-xpm \
+    --with-webp \
+	&& docker-php-ext-enable \
+		opcache \
+	&& docker-php-ext-install \
+		intl \
+		zip \
+		exif \
+		gd \
+		pdo \
+		pdo_mysql \
+	&& apt-get autoremove -y
 
-# install  ALL module for Sylius check requirements
-RUN set -xe \
-    && apk add --update \
-        icu \
-    && apk add --no-cache --virtual .php-deps \
-        make \
-    && apk add --no-cache --virtual .build-deps \
-        $PHPIZE_DEPS \
-        zlib-dev \
-        icu-dev \
-        g++ \
-    && docker-php-ext-configure intl \
-    && docker-php-ext-install \
-        intl \
-        exif \
-        fileinfo \
-    && docker-php-ext-enable intl \
-    && { find /usr/local/lib -type f -print0 | xargs -0r strip --strip-all -p 2>/dev/null || true; } \
-    && apk del .build-deps \
-    && rm -rf /tmp/* /usr/local/lib/php/doc/* /var/cache/apk/*
-RUN apk add --no-cache libpng libpng-dev && docker-php-ext-install gd && apk del libpng-dev
-RUN docker-php-ext-install pdo pdo_mysql opcache
-RUN docker-php-ext-configure gd --with-jpeg-dir=/usr/include/ --with-png-dir=/usr/include --with-webp-dir=/usr/include --with-freetype-dir=/usr/include/;
-RUN docker-php-ext-configure gd
 
+# All things composer
+RUN php -r 'readfile("https://getcomposer.org/installer");' > composer-setup.php \
+	&& php composer-setup.php --install-dir=/usr/local/bin --filename=composer \
+	&& rm -f composer-setup.php \
+	&& chown www-data.www-data /var/www
 
+USER www-data
+USER root
 
-WORKDIR  /var/www/html
+# PHP configuration
+ADD php.ini /usr/local/etc/php/conf.d/php.ini
+ADD php-cli.ini /usr/local/etc/php/php-cli.ini
 
-RUN chown www-data:www-data .
-RUN apk update \
-	 && apk add zip
+# Copy entrypoint
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+WORKDIR /srv/sylius
 
-RUN apk update && apk upgrade
-RUN apk add php7-zip
-
-EXPOSE 9000
-
-CMD ["php-fpm"]
+ENTRYPOINT /usr/local/bin/docker-entrypoint.sh php-fpm
